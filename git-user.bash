@@ -1,5 +1,5 @@
 # ============================================================
-# Git User Switcher — zsh 버전
+# Git User Switcher — bash 4+ 호환 버전
 # ============================================================
 # 사용법: gituser <alias | subcommand>
 #
@@ -10,6 +10,12 @@
 # 환경변수로 설정 파일 경로 변경 가능:
 #   export GITUSER_CONFIG="/path/to/accounts"
 # ============================================================
+
+# bash 4+ 필요 (associative array 지원)
+if ((BASH_VERSINFO[0] < 4)); then
+  echo "gituser: bash 4.0 이상이 필요합니다. (현재: $BASH_VERSION)" >&2
+  return 1
+fi
 
 # ── 설정 ────────────────────────────────────────────────────
 
@@ -27,12 +33,12 @@ _gu_cyan()   { printf "\033[36m%s\033[0m" "$*"; }
 
 # ── 계정 로딩 ───────────────────────────────────────────────
 #
-# _GITUSER_MAP:          alias → "name:email:key_path"
+# _GITUSER_MAP:   alias → "name:email:key_path"  (associative array)
 # _GITUSER_ACCOUNTS_RAW: 원본 줄 목록 (list 출력용)
 
 function _gituser_load() {
-  typeset -gA _GITUSER_MAP
-  typeset -ga _GITUSER_ACCOUNTS_RAW
+  declare -gA _GITUSER_MAP
+  declare -ga _GITUSER_ACCOUNTS_RAW
   _GITUSER_MAP=()
   _GITUSER_ACCOUNTS_RAW=()
 
@@ -42,7 +48,7 @@ function _gituser_load() {
 
   while IFS= read -r line; do
     # 빈 줄 / 주석 스킵
-    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
 
     local raw_aliases="${line%%:*}"
     local rest="${line#*:}"
@@ -55,11 +61,12 @@ function _gituser_load() {
 
     _GITUSER_ACCOUNTS_RAW+=("${raw_aliases}:${rest}")
 
-    # 각 alias를 맵에 등록
-    local alias
-    for alias in ${(s:,:)raw_aliases}; do
-      alias="${alias// /}"
-      _GITUSER_MAP[$alias]="$rest"
+    # 각 alias를 맵에 등록 (bash IFS 분리)
+    local alias_entry
+    IFS=',' read -ra alias_list <<< "$raw_aliases"
+    for alias_entry in "${alias_list[@]}"; do
+      alias_entry="${alias_entry// /}"  # 공백 제거
+      _GITUSER_MAP["$alias_entry"]="$rest"
     done
   done < "$GITUSER_CONFIG"
 }
@@ -85,8 +92,7 @@ function _gituser_switch() {
   if [[ "$scope" == "--global" ]]; then
     unset GIT_SSH_COMMAND
     export GIT_SSH_COMMAND="ssh -i $key_path"
-    eval "$(ssh-agent -s)" > /dev/null 2>&1
-    ssh-add --apple-use-keychain "$key_path" 2>/dev/null || ssh-add "$key_path" 2>/dev/null
+    ssh-add "$key_path" 2>/dev/null
   fi
 
   local scope_label="global"
@@ -159,15 +165,13 @@ function _gituser_help() {
   echo "$(_gu_bold 'Usage:') gituser <alias | subcommand>"
   echo ""
   echo "$(_gu_bold 'Subcommands:')"
-  printf "  %-28s %s\n" "list"                "등록된 모든 계정 보기"
-  printf "  %-28s %s\n" "current"             "현재 git 계정 확인"
-  printf "  %-28s %s\n" "add"                 "인터랙티브 계정 등록"
-  printf "  %-28s %s\n" "set <alias>"         "현재 저장소에만 계정 적용 (--local)"
-  printf "  %-28s %s\n" "rule add <a> <dir>"  "디렉토리 자동 전환 규칙 추가"
-  printf "  %-28s %s\n" "rule list"           "등록된 규칙 목록 보기"
-  printf "  %-28s %s\n" "rule remove <a> <dir>" "규칙 제거"
-  printf "  %-28s %s\n" "clone <alias> <url>" "계정 지정 clone"
-  printf "  %-28s %s\n" "<alias>"             "해당 계정으로 전환 (--global)"
+  printf "  %-18s %s\n" "list"              "등록된 모든 계정 보기"
+  printf "  %-18s %s\n" "current"           "현재 git 계정 확인"
+  printf "  %-18s %s\n" "add"               "인터랙티브 계정 등록"
+  printf "  %-18s %s\n" "set <alias>"       "현재 저장소에만 계정 적용 (--local)"
+  printf "  %-18s %s\n" "rule <sub>"        "디렉토리 자동 전환 규칙 관리"
+  printf "  %-18s %s\n" "clone <alias> <url>" "계정 지정 clone"
+  printf "  %-18s %s\n" "<alias>"           "해당 계정으로 전환 (--global)"
   echo ""
 
   if [[ ${#_GITUSER_ACCOUNTS_RAW[@]} -gt 0 ]]; then
@@ -187,47 +191,6 @@ function _gituser_help() {
   fi
 }
 
-# ── 내부: fzf 인터랙티브 선택 ───────────────────────────────
-
-function _gituser_fzf() {
-  _gituser_load
-
-  if [[ ${#_GITUSER_ACCOUNTS_RAW[@]} -eq 0 ]]; then
-    echo "$(_gu_yellow '⚠') 등록된 계정이 없습니다. 'gituser add' 로 추가하세요."
-    return 1
-  fi
-
-  local current_name
-  current_name="$(git config --global user.name 2>/dev/null)"
-
-  local options=()
-  local entry aliases rest name email key_path mark
-  for entry in "${_GITUSER_ACCOUNTS_RAW[@]}"; do
-    aliases="${entry%%:*}"
-    rest="${entry#*:}"
-    name="${rest%%:*}"
-    rest="${rest#*:}"
-    email="${rest%%:*}"
-    key_path="${rest#*:}"
-    mark=""
-    [[ "$name" == "$current_name" ]] && mark=" ✔"
-    options+=("${aliases%%,*}  ${name}  <${email}>${mark}")
-  done
-
-  local selected
-  selected="$(printf '%s\n' "${options[@]}" | fzf \
-    --prompt="  Git User > " \
-    --header="계정을 선택하세요 (Enter: 전환, Esc: 취소)" \
-    --height=40% \
-    --reverse \
-    --no-info)"
-
-  [[ -z "$selected" ]] && return 0
-
-  local chosen_alias="${selected%% *}"
-  _gituser_do "$chosen_alias"
-}
-
 # ── 내부: alias로 실제 전환 수행 ────────────────────────────
 
 function _gituser_do() {
@@ -235,7 +198,7 @@ function _gituser_do() {
   local scope="${2:---global}"
   _gituser_load
 
-  if [[ -z "${_GITUSER_MAP[$alias_key]}" ]]; then
+  if [[ -z "${_GITUSER_MAP[$alias_key]+x}" ]]; then
     echo "$(_gu_red '✗') 알 수 없는 alias: '$(_gu_yellow "$alias_key")'"
     _gituser_help
     return 1
@@ -275,7 +238,7 @@ function _gituser_add() {
     echo "$(_gu_yellow '⚠') SSH 키를 찾을 수 없습니다: $gu_key"
     printf "  계속 진행할까요? $(_gu_dim '[y/N]'): "
     read -r confirm
-    [[ "${confirm:l}" != "y" ]] && echo "취소됨." && return 0
+    [[ "${confirm,,}" != "y" ]] && echo "취소됨." && return 0
   fi
 
   printf "  Aliases $(_gu_dim '(쉼표 구분, 첫 번째가 표시 이름)'): "
@@ -326,9 +289,9 @@ function _gituser_rule() {
     *)
       echo "$(_gu_bold 'Usage:') gituser rule <add|list|remove>"
       echo ""
-      printf "  %-28s %s\n" "rule add <alias> <dir>"    "디렉토리에 계정 규칙 추가"
-      printf "  %-28s %s\n" "rule list"                 "등록된 규칙 목록 보기"
-      printf "  %-28s %s\n" "rule remove <alias> <dir>" "규칙 제거"
+      printf "  %-26s %s\n" "rule add <alias> <dir>"    "디렉토리에 계정 규칙 추가"
+      printf "  %-26s %s\n" "rule list"                 "등록된 규칙 목록 보기"
+      printf "  %-26s %s\n" "rule remove <alias> <dir>" "규칙 제거"
       echo ""
       ;;
   esac
@@ -345,7 +308,7 @@ function _gituser_rule_add() {
 
   _gituser_load
 
-  if [[ -z "${_GITUSER_MAP[$alias_key]}" ]]; then
+  if [[ -z "${_GITUSER_MAP[$alias_key]+x}" ]]; then
     echo "$(_gu_red '✗') 알 수 없는 alias: '$(_gu_yellow "$alias_key")'"
     return 1
   fi
@@ -413,13 +376,12 @@ function _gituser_rule_remove() {
     return 1
   fi
 
-  local marker
   if [[ -n "$target_dir" ]]; then
     target_dir="$(cd "$target_dir" 2>/dev/null && pwd || echo "${target_dir/#\~/$HOME}")"
     target_dir="${target_dir%/}/"
-    marker="# gituser:rule:${alias_key}:${target_dir}"
+    local marker="# gituser:rule:${alias_key}:${target_dir}"
   else
-    marker="# gituser:rule:${alias_key}:"
+    local marker="# gituser:rule:${alias_key}:"
   fi
 
   if ! grep -qF "$marker" "$gitconfig" 2>/dev/null; then
@@ -427,6 +389,8 @@ function _gituser_rule_remove() {
     return 1
   fi
 
+  # 마커 라인 + 다음 2줄(includeIf 블록) 제거
+  # 빈 줄 포함하여 4줄 제거
   local tmp_file
   tmp_file="$(mktemp)"
   awk -v marker="$marker" '
@@ -456,13 +420,14 @@ function _gituser_rule_list() {
   fi
 
   local found=false
-  local alias_key target_dir entry name rest email
+  local alias_key target_dir
   while IFS= read -r line; do
-    if [[ "$line" =~ '^# gituser:rule:([^:]+):(.+)$' ]]; then
-      alias_key="${match[1]}"
-      target_dir="${match[2]}"
+    if [[ "$line" =~ ^#\ gituser:rule:([^:]+):(.+)$ ]]; then
+      alias_key="${BASH_REMATCH[1]}"
+      target_dir="${BASH_REMATCH[2]}"
       _gituser_load
-      entry="${_GITUSER_MAP[$alias_key]:-}"
+      local entry="${_GITUSER_MAP[$alias_key]:-}"
+      local name email
       if [[ -n "$entry" ]]; then
         name="${entry%%:*}"
         rest="${entry#*:}"
@@ -503,7 +468,7 @@ function _gituser_clone() {
 
   _gituser_load
 
-  if [[ -z "${_GITUSER_MAP[$alias_key]}" ]]; then
+  if [[ -z "${_GITUSER_MAP[$alias_key]+x}" ]]; then
     echo "$(_gu_red '✗') 알 수 없는 alias: '$(_gu_yellow "$alias_key")'"
     return 1
   fi
@@ -534,6 +499,7 @@ function _gituser_clone() {
 
   # clone된 디렉토리 이름 추출
   local repo_dir
+  # extra_args 마지막 인자가 있으면 그게 target dir일 수 있음
   if [[ ${#extra_args[@]} -gt 0 && "${extra_args[-1]}" != -* ]]; then
     repo_dir="${extra_args[-1]}"
   else
@@ -561,11 +527,7 @@ function _gituser_clone() {
 function gituser() {
   case "$1" in
     "")
-      if command -v fzf &>/dev/null; then
-        _gituser_fzf
-      else
-        _gituser_help
-      fi
+      _gituser_help
       ;;
     list)
       _gituser_list

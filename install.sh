@@ -65,12 +65,20 @@ section "셸 연동 ($RC_FILE)"
 MARKER_START="# >>> dotfiles >>>"
 MARKER_END="# <<< dotfiles <<<"
 
+# OS에 따라 로드할 파일 확장자 결정
+# macOS(zsh): *.zsh 로드  /  Linux(bash): *.bash 로드
+if [[ "$OS" == "macOS" ]]; then
+  DF_PATTERN="*.zsh"
+else
+  DF_PATTERN="*.bash"
+fi
+
 # 블록 내용 (RC_FILE에 삽입될 내용)
 SOURCE_BLOCK="
 $MARKER_START
 # dotfiles 자동 로드 (install.sh가 생성)
 DOTFILES_DIR=\"$DOTFILES_DIR\"
-for _df_file in \"\$DOTFILES_DIR\"/*.zsh; do
+for _df_file in \"\$DOTFILES_DIR\"/$DF_PATTERN; do
   [ -f \"\$_df_file\" ] && source \"\$_df_file\"
 done
 unset _df_file
