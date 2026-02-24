@@ -50,7 +50,8 @@ function _gituser_load() {
     # ~ 경로 확장 (마지막 필드 key_path)
     local key_path="${rest##*:}"
     local name_email="${rest%:*}"
-    key_path="${key_path/#\~/$HOME}"
+    key_path="${key_path/#\\\~/~}"   # \~ → ~ (잘못 저장된 경우 정규화)
+    key_path="${key_path/#\~/$HOME}" # ~ → $HOME
     rest="${name_email}:${key_path}"
 
     _GITUSER_ACCOUNTS_RAW+=("${raw_aliases}:${rest}")
