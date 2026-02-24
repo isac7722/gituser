@@ -12,7 +12,7 @@
 set -e
 
 GITUSER_REPO="https://github.com/isac7722/gituser.git"
-GITUSER_DEFAULT_DIR="$HOME/gituser"
+GITUSER_DEFAULT_DIR="$HOME/.gituser"
 
 # curl | bash 또는 bash <(curl ...) 로 실행된 경우:
 # BASH_SOURCE[0]가 비어있거나 실제 install.sh가 아닌 경우 리모트 모드로 동작
