@@ -27,15 +27,15 @@ gituser/
 bash <(curl -fsSL https://raw.githubusercontent.com/isac7722/gituser/main/install.sh)
 ```
 
-자동으로 `~/gituser`에 저장소를 클론하고 설치까지 진행합니다.
+자동으로 `~/.gituser`에 저장소를 클론하고 설치까지 진행합니다.
 
 > **참고:** `curl ... | bash` 대신 `bash <(curl ...)` 형태를 사용합니다. 전자는 stdin을 파이프가 점유해 인터랙티브 입력이 불가능하고, 후자는 stdin이 터미널에 연결된 채로 동작합니다.
 
 ### 수동 설치 (직접 클론)
 
 ```bash
-git clone git@github.com:isac7722/gituser.git ~/gituser
-cd ~/gituser
+git clone git@github.com:isac7722/gituser.git ~/.gituser
+cd ~/.gituser
 ./install.sh
 ```
 
@@ -194,10 +194,10 @@ clone 후 해당 저장소에 `--local` 계정 설정을 자동으로 적용합�
 
 ```bash
 # macOS (zsh)
-touch ~/gituser/my-functions.zsh
+touch ~/.gituser/my-functions.zsh
 
 # Linux (bash)
-touch ~/gituser/my-functions.bash
+touch ~/.gituser/my-functions.bash
 ```
 
 편집 후 `source ~/.zshrc` (또는 `~/.bashrc`)로 적용.
