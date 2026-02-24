@@ -169,8 +169,10 @@ function _gituser_help() {
   printf "  %-18s %s\n" "current"           "현재 git 계정 확인"
   printf "  %-18s %s\n" "add"               "인터랙티브 계정 등록"
   printf "  %-18s %s\n" "set <alias>"       "현재 저장소에만 계정 적용 (--local)"
+  printf "  %-18s %s\n" "ssh-key <a> [path]" "SSH 키 경로 조회/변경"
   printf "  %-18s %s\n" "rule <sub>"        "디렉토리 자동 전환 규칙 관리"
   printf "  %-18s %s\n" "clone <alias> <url>" "계정 지정 clone"
+  printf "  %-18s %s\n" "update"            "dotfiles repo git pull"
   printf "  %-18s %s\n" "<alias>"           "해당 계정으로 전환 (--global)"
   echo ""
 
@@ -245,7 +247,7 @@ function _gituser_add() {
   read -r gu_aliases
   [[ -z "$gu_aliases" ]] && gu_aliases="$gu_name"
 
-  local new_line="${gu_aliases}:${gu_name}:${gu_email}:${gu_key/#$HOME/\~}"
+  local new_line="${gu_aliases}:${gu_name}:${gu_email}:${gu_key/#$HOME/~}"
 
   mkdir -p "$(dirname "$GITUSER_CONFIG")"
   echo "$new_line" >> "$GITUSER_CONFIG"
@@ -255,6 +257,117 @@ function _gituser_add() {
   printf "  %-10s %s\n" "이름:"    "$(_gu_bold "$gu_name")"
   printf "  %-10s %s\n" "이메일:" "$gu_email"
   printf "  %-10s %s\n" "Aliases:" "$gu_aliases"
+  echo ""
+}
+
+# ── 내부: SSH 키 경로 변경 ───────────────────────────────────
+
+function _gituser_ssh_key() {
+  local alias_key="$1"
+  local new_key="$2"
+
+  if [[ -z "$alias_key" ]]; then
+    echo "$(_gu_bold 'Usage:') gituser ssh-key <alias> [new_path]"
+    echo ""
+    echo "  alias만 입력하면 현재 SSH 키 경로를 표시합니다."
+    echo "  new_path를 입력하면 해당 경로로 변경합니다."
+    echo ""
+    return 1
+  fi
+
+  _gituser_load
+
+  if [[ -z "${_GITUSER_MAP[$alias_key]+x}" ]]; then
+    echo "$(_gu_red '✗') 알 수 없는 alias: '$(_gu_yellow "$alias_key")'"
+    return 1
+  fi
+
+  local entry="${_GITUSER_MAP[$alias_key]}"
+  local name="${entry%%:*}"
+  local rest="${entry#*:}"
+  local email="${rest%%:*}"
+  local old_key="${rest#*:}"
+
+  # 경로만 조회
+  if [[ -z "$new_key" ]]; then
+    echo ""
+    printf "  %-10s %s\n" "계정:"    "$(_gu_bold "$name") $(_gu_dim "<$email>")"
+    printf "  %-10s %s\n" "SSH 키:" "$old_key"
+    if [[ -f "$old_key" ]]; then
+      printf "  %-10s %s\n" "상태:" "$(_gu_green '파일 존재')"
+    else
+      printf "  %-10s %s\n" "상태:" "$(_gu_red '파일 없음')"
+    fi
+    echo ""
+    return 0
+  fi
+
+  # 새 경로 처리
+  new_key="${new_key/#\~/$HOME}"
+  if [[ ! -f "$new_key" ]]; then
+    echo "$(_gu_yellow '⚠') SSH 키를 찾을 수 없습니다: $new_key"
+    printf "  계속 진행할까요? $(_gu_dim '[y/N]'): "
+    read -r confirm
+    [[ "${confirm,,}" != "y" ]] && echo "취소됨." && return 0
+  fi
+
+  # 설정 파일에서 해당 계정 줄의 SSH 키 경로 교체
+  local old_key_pattern="${old_key/#$HOME/~}"
+  local new_key_display="${new_key/#$HOME/~}"
+
+  local tmp_file
+  tmp_file="$(mktemp)"
+  local matched=false
+
+  while IFS= read -r line; do
+    if [[ -z "$line" || "${line:0:1}" == "#" ]]; then
+      echo "$line" >> "$tmp_file"
+      continue
+    fi
+
+    local line_aliases="${line%%:*}"
+    local found=false
+    IFS=',' read -ra check_list <<< "$line_aliases"
+    local a
+    for a in "${check_list[@]}"; do
+      [[ "${a// /}" == "$alias_key" ]] && found=true && break
+    done
+
+    if $found; then
+      local line_rest="${line%:*}"
+      echo "${line_rest}:${new_key_display}" >> "$tmp_file"
+      matched=true
+    else
+      echo "$line" >> "$tmp_file"
+    fi
+  done < "$GITUSER_CONFIG"
+
+  if ! $matched; then
+    rm -f "$tmp_file"
+    echo "$(_gu_red '✗') 설정 파일에서 계정을 찾을 수 없습니다."
+    return 1
+  fi
+
+  mv "$tmp_file" "$GITUSER_CONFIG"
+
+  # includeIf 프로파일이 있으면 함께 갱신
+  local profile_file="$GITUSER_PROFILES_DIR/${alias_key}.gitconfig"
+  if [[ -f "$profile_file" ]]; then
+    cat > "$profile_file" <<EOF
+[user]
+    name = $name
+    email = $email
+[core]
+    sshCommand = ssh -i $new_key
+EOF
+    echo "  $(_gu_dim "프로파일 갱신: $profile_file")"
+  fi
+
+  echo ""
+  echo "$(_gu_green '✔') SSH 키 경로 변경 완료"
+  printf "  %-10s %s\n" "계정:"   "$(_gu_bold "$name")"
+  printf "  %-10s %s\n" "이전:"   "$(_gu_dim "$old_key")"
+  printf "  %-10s %s\n" "변경:"   "$(_gu_bold "$new_key")"
   echo ""
 }
 
@@ -522,6 +635,48 @@ function _gituser_clone() {
   fi
 }
 
+# ── 내부: dotfiles repo 업데이트 ────────────────────────────
+
+function _gituser_update() {
+  if [[ -z "$DOTFILES_DIR" ]]; then
+    echo "$(_gu_red '✗') DOTFILES_DIR 변수가 설정되지 않았습니다."
+    echo "  install.sh를 먼저 실행하세요."
+    return 1
+  fi
+
+  if [[ ! -d "$DOTFILES_DIR/.git" ]]; then
+    echo "$(_gu_red '✗') $DOTFILES_DIR 가 git 저장소가 아닙니다."
+    return 1
+  fi
+
+  echo ""
+  echo "$(_gu_bold 'dotfiles 업데이트')"
+  echo "$(_gu_dim '──────────────────────────────')"
+  printf "  %-10s %s\n" "경로:" "$(_gu_dim "$DOTFILES_DIR")"
+  echo ""
+
+  local pull_output
+  pull_output="$(git -C "$DOTFILES_DIR" pull 2>&1)"
+  local pull_status=$?
+
+  if [[ $pull_status -ne 0 ]]; then
+    echo "$(_gu_red '✗') git pull 실패"
+    echo "$pull_output" | sed 's/^/  /'
+    return $pull_status
+  fi
+
+  if echo "$pull_output" | grep -q "Already up to date"; then
+    echo "$(_gu_green '✔') 이미 최신 상태입니다."
+  else
+    echo "$(_gu_green '✔') 업데이트 완료"
+    echo "$pull_output" | sed 's/^/  /'
+    echo ""
+    echo "  $(_gu_dim '변경사항을 적용하려면:')"
+    echo "    source ~/.bashrc"
+  fi
+  echo ""
+}
+
 # ── 메인 커맨드 ─────────────────────────────────────────────
 
 function gituser() {
@@ -550,6 +705,10 @@ function gituser() {
       shift
       _gituser_set "$@"
       ;;
+    ssh-key)
+      shift
+      _gituser_ssh_key "$@"
+      ;;
     rule)
       shift
       _gituser_rule "$@"
@@ -557,6 +716,9 @@ function gituser() {
     clone)
       shift
       _gituser_clone "$@"
+      ;;
+    update)
+      _gituser_update
       ;;
     help|-h|--help)
       _gituser_help
