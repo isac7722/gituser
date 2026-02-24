@@ -1,18 +1,18 @@
 # Git User Accounts Configuration
 # =================================
-# 이 파일을 ~/.config/gituser/accounts 로 복사하여 사용하세요.
-# install.sh가 자동으로 복사해줍니다.
+# Copy this file to ~/.config/gituser/accounts to use it.
+# install.sh does this automatically.
 #
-# 형식: aliases:name:email:ssh_key_path
+# Format: aliases:name:email:ssh_key_path
 #
-#   aliases    - 쉼표로 구분된 alias 목록 (첫 번째가 표시 이름)
-#   name       - git user.name
-#   email      - git user.email
-#   ssh_key_path - SSH 개인키 경로 (~/ 사용 가능)
+#   aliases      - comma-separated alias list (first one is the display name)
+#   name         - git user.name
+#   email        - git user.email
+#   ssh_key_path - path to SSH private key (~/ supported)
 #
-# 예시:
+# Examples:
 # work,w:John Work:john@company.com:~/.ssh/work_ed25519
 # personal,p,me:John Personal:john@gmail.com:~/.ssh/personal_ed25519
 
-# 아래에 계정을 추가하세요:
+# Add your accounts below:
 # alias1,alias2:name:email:~/.ssh/key_name

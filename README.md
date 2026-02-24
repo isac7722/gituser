@@ -1,37 +1,24 @@
 # gituser
 
-개인 개발 환경 스크립트 모음. 기존 셸 설정(`.zshrc` / `.bashrc`)을 교체하지 않고, **source 블록만 주입**하는 방식으로 동작합니다.
+A shell utility for **easily switching between multiple GitHub accounts**. Designed for developers who maintain separate personal and work GitHub identities, `gituser` lets you switch Git users in seconds — without touching your existing shell config.
 
-## 구조
-
-```
-gituser/
-├── git-user.zsh        ← Git 계정 관리 (zsh / macOS)
-├── git-user.bash       ← Git 계정 관리 (bash / Linux)
-├── utils.zsh           ← 개인용 유틸리티 함수
-├── config/
-│   └── gitusers.example  ← Git 계정 설정 템플릿
-├── install.sh          ← 설치 스크립트
-└── .gitignore
-```
-
-루트의 `*.zsh` (macOS) 또는 `*.bash` (Linux) 파일이 자동으로 셸에 로드됩니다.
+It works by **injecting a source block** into your existing `.zshrc` / `.bashrc` rather than replacing it entirely.
 
 ---
 
-## 설치
+## Quick Install
 
-### 원라인 설치 (새 머신)
+### One-liner (new machine)
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/isac7722/gituser/main/install.sh)
 ```
 
-자동으로 `~/.gituser`에 저장소를 클론하고 설치까지 진행합니다.
+This clones the repo to `~/.gituser` and runs the installer automatically.
 
-> **참고:** `curl ... | bash` 대신 `bash <(curl ...)` 형태를 사용합니다. 전자는 stdin을 파이프가 점유해 인터랙티브 입력이 불가능하고, 후자는 stdin이 터미널에 연결된 채로 동작합니다.
+> **Note:** We use `bash <(curl ...)` instead of `curl ... | bash`. The latter hijacks stdin via the pipe, making interactive prompts impossible. The former keeps stdin connected to your terminal.
 
-### 수동 설치 (직접 클론)
+### Manual install
 
 ```bash
 git clone git@github.com:isac7722/gituser.git ~/.gituser
@@ -39,21 +26,13 @@ cd ~/.gituser
 ./install.sh
 ```
 
-변경 내용을 먼저 확인하려면:
+To preview changes before applying:
 
 ```bash
 ./install.sh --dry-run
 ```
 
-**install.sh가 하는 일:**
-
-| 단계 | 내용 |
-|------|------|
-| OS 감지 | macOS → `~/.zshrc` + `*.zsh` 로드 / Linux → `~/.bashrc` + `*.bash` 로드 |
-| source 블록 주입 | RC 파일에 gituser 로드 블록 추가 (이미 있으면 스킵) |
-| 설정 파일 생성 | `~/.config/gituser/accounts` 생성 (템플릿 복사) |
-
-### 3. 적용
+### Apply
 
 ```bash
 source ~/.zshrc   # macOS
@@ -62,34 +41,59 @@ source ~/.bashrc  # Linux
 
 ---
 
-## Git 계정 설정
+## Repository Structure
 
-### 계정 등록 방법
+```
+gituser/
+├── git-user.zsh        ← Git account management (zsh / macOS)
+├── git-user.bash       ← Git account management (bash / Linux)
+├── utils.zsh           ← Personal utility functions
+├── config/
+│   └── gitusers.example  ← Account config template
+├── install.sh          ← Installer script
+└── .gitignore
+```
 
-**방법 A: 인터랙티브 등록 (권장)**
+Root-level `*.zsh` (macOS) or `*.bash` (Linux) files are automatically sourced into your shell.
+
+**What `install.sh` does:**
+
+| Step | Description |
+|------|-------------|
+| OS detection | macOS → injects into `~/.zshrc` + loads `*.zsh` / Linux → injects into `~/.bashrc` + loads `*.bash` |
+| Source block injection | Adds a gituser load block to your RC file (skipped if already present) |
+| Config file creation | Creates `~/.config/gituser/accounts` from the template |
+
+---
+
+## Setting Up Git Accounts
+
+### Registering an account
+
+**Option A: Interactive (recommended)**
 
 ```bash
 gituser add
 ```
 
 ```
-계정 등록 → ~/.config/gituser/accounts
+Register account → ~/.config/gituser/accounts
 
-  이름 (git user.name): isac7722
-  이메일 (git user.email): 57675355+isac7722@users.noreply.github.com
-  SSH 키 경로 (예: ~/.ssh/work_ed25519): ~/.ssh/isac7722_ed25519
-  Aliases (쉼표 구분, 첫 번째가 표시 이름): isac,i,isac7722
+  Name (git user.name): isac7722
+  Email (git user.email): 57675355+isac7722@users.noreply.github.com
+  SSH key path (e.g. ~/.ssh/work_ed25519): ~/.ssh/isac7722_ed25519
+  Aliases (comma-separated, first is display name): isac,i,isac7722
 
-✔ 계정 추가 완료
+✔ Account added
 ```
 
-**방법 B: 설정 파일 직접 편집**
+**Option B: Edit the config file directly**
 
 ```bash
 $EDITOR ~/.config/gituser/accounts
 ```
 
-파일 형식:
+File format:
 
 ```
 # aliases:name:email:ssh_key_path
@@ -97,26 +101,26 @@ isac,i,isac7722:isac7722:57675355+isac7722@users.noreply.github.com:~/.ssh/isac7
 pang,p,pangjoong:pangjoong:pangjoong@minirecord.com:~/.ssh/pangjoong_rsa
 ```
 
-| 필드 | 설명 |
-|------|------|
-| `aliases` | 쉼표로 구분된 alias 목록 (첫 번째가 표시 이름) |
+| Field | Description |
+|-------|-------------|
+| `aliases` | Comma-separated alias list (first one is the display name) |
 | `name` | `git config user.name` |
 | `email` | `git config user.email` |
-| `ssh_key_path` | SSH 개인키 경로 (`~/` 사용 가능) |
+| `ssh_key_path` | Path to SSH private key (`~/` supported) |
 
-이 파일은 개인 정보를 포함하므로 repo에 커밋되지 않습니다.
+This file contains personal information and is not committed to the repo.
 
 ---
 
-## gituser 커맨드
+## gituser Commands
 
-### 기본 전환
+### Switch accounts
 
 ```bash
-gituser               # fzf 인터랙티브 선택 (fzf 미설치 시 help)
-gituser list          # 등록된 계정 목록 (현재 계정 표시)
-gituser current       # 현재 활성 계정 확인
-gituser <alias>       # 해당 계정으로 전환 (global)
+gituser               # Interactive selection via fzf (shows help if fzf not installed)
+gituser list          # List registered accounts (highlights current)
+gituser current       # Show the currently active account
+gituser <alias>       # Switch to the specified account (global)
 ```
 
 ```
@@ -131,15 +135,15 @@ $ gituser list
 ──────────────────────────────────────────────
 ```
 
-### 계정 등록
+### Add an account
 
 ```bash
-gituser add           # 인터랙티브 계정 등록
+gituser add           # Interactive account registration
 ```
 
-### per-repo 계정 설정
+### Per-repo account
 
-특정 저장소에서만 계정을 적용합니다. global 설정은 변경되지 않습니다.
+Apply an account to a specific repository only. Global config is not affected.
 
 ```bash
 cd ~/dev/some-repo
@@ -147,50 +151,50 @@ gituser set pang
 ```
 
 ```
-✔ Git 계정 전환 완료 [local (이 저장소만)]
-  이름:      pangjoong
-  이메일:    pangjoong@minirecord.com
-  SSH 키:    /Users/user/.ssh/pangjoong_rsa
+✔ Git account switched [local (this repo only)]
+  Name:      pangjoong
+  Email:     pangjoong@minirecord.com
+  SSH Key:   /Users/user/.ssh/pangjoong_rsa
 ```
 
-내부적으로 `git config --local`과 `core.sshCommand`를 설정합니다.
+Internally sets `git config --local` and `core.sshCommand` for the repo.
 
-### 디렉토리 자동 전환 (rule)
+### Auto-switch by directory (rules)
 
-특정 디렉토리 아래 모든 저장소에 자동으로 계정을 적용합니다. 수동 전환 없이 `cd` 만 해도 Git이 올바른 계정을 사용합니다.
+Automatically apply an account to all repos under a given directory. Just `cd` in — no manual switching needed.
 
 ```bash
-gituser rule add pang ~/dev/personal       # 규칙 추가
-gituser rule list                          # 등록된 규칙 보기
-gituser rule remove pang ~/dev/personal   # 규칙 제거
+gituser rule add pang ~/dev/personal       # Add a rule
+gituser rule list                          # View registered rules
+gituser rule remove pang ~/dev/personal   # Remove a rule
 ```
 
 ```
 $ gituser rule list
 
- includeIf 디렉토리 규칙
+ includeIf Directory Rules
 ──────────────────────────────────────────────
   /Users/user/dev/personal/  → pangjoong <pangjoong@minirecord.com>
   /Users/user/dev/work/      → isac7722  <57675355+isac7722@...>
 ──────────────────────────────────────────────
 ```
 
-**동작 원리:** `~/.gitconfig`에 `[includeIf "gitdir:..."]` 블록을 추가하고, `~/.config/gituser/profiles/<alias>.gitconfig`에 user/core.sshCommand를 저장합니다. Git 네이티브 기능이므로 셸 세션에 무관하게 영구적으로 동작합니다.
+**How it works:** Adds `[includeIf "gitdir:..."]` blocks to `~/.gitconfig` and stores user/`core.sshCommand` settings in `~/.config/gituser/profiles/<alias>.gitconfig`. Uses Git's native feature — works permanently regardless of shell session.
 
-### 계정 지정 clone
+### Clone with a specific account
 
 ```bash
 gituser clone pang git@github.com:user/repo.git
 gituser clone isac git@github.com:user/repo.git my-repo-dir
 ```
 
-clone 후 해당 저장소에 `--local` 계정 설정을 자동으로 적용합니다.
+Automatically applies the specified account as a `--local` config after cloning.
 
 ---
 
-## 커스텀 함수 추가
+## Adding Custom Shell Functions
 
-루트 디렉토리에 파일을 추가하면 셸 시작 시 자동으로 로드됩니다.
+Any file added to the root directory is automatically sourced at shell startup.
 
 ```bash
 # macOS (zsh)
@@ -200,33 +204,33 @@ touch ~/.gituser/my-functions.zsh
 touch ~/.gituser/my-functions.bash
 ```
 
-편집 후 `source ~/.zshrc` (또는 `~/.bashrc`)로 적용.
+After editing, run `source ~/.zshrc` (or `~/.bashrc`) to apply.
 
 ---
 
-## SSH 키 설정
+## SSH Key Setup
 
-SSH 키는 보안상 이 저장소에 포함되지 않습니다.
+SSH keys are not included in this repo for security reasons.
 
-**기존 컴퓨터에서 복사:**
+**Copy from an existing machine:**
 
 ```bash
-scp ~/.ssh/key_name 새컴퓨터:~/.ssh/key_name
+scp ~/.ssh/key_name newmachine:~/.ssh/key_name
 chmod 600 ~/.ssh/key_name
 ```
 
-**새로 생성:**
+**Generate a new key:**
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/key_name -C "comment"
-# 생성 후 GitHub → Settings → SSH Keys 에 공개키(.pub) 등록
+# Then add the public key (.pub) to GitHub → Settings → SSH Keys
 ```
 
 ---
 
-## 설정 파일 경로 변경
+## Custom Config Paths
 
-환경변수로 기본 경로를 변경할 수 있습니다:
+Override the default paths with environment variables:
 
 ```bash
 export GITUSER_CONFIG="/path/to/accounts"
