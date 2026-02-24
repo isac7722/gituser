@@ -1,11 +1,11 @@
-# dotfiles
+# gituser
 
 개인 개발 환경 스크립트 모음. 기존 셸 설정(`.zshrc` / `.bashrc`)을 교체하지 않고, **source 블록만 주입**하는 방식으로 동작합니다.
 
 ## 구조
 
 ```
-dotfiles/
+gituser/
 ├── git-user.zsh        ← Git 계정 관리 (zsh / macOS)
 ├── git-user.bash       ← Git 계정 관리 (bash / Linux)
 ├── utils.zsh           ← 개인용 유틸리티 함수
@@ -21,17 +21,21 @@ dotfiles/
 
 ## 설치
 
-### 1. 저장소 클론
+### 원라인 설치 (새 머신)
 
 ```bash
-git clone git@github.com:<username>/dotfiles.git ~/dotfiles
+bash <(curl -fsSL https://raw.githubusercontent.com/isac7722/gituser/main/install.sh)
 ```
 
-### 2. 설치 실행
+자동으로 `~/gituser`에 저장소를 클론하고 설치까지 진행합니다.
+
+> **참고:** `curl ... | bash` 대신 `bash <(curl ...)` 형태를 사용합니다. 전자는 stdin을 파이프가 점유해 인터랙티브 입력이 불가능하고, 후자는 stdin이 터미널에 연결된 채로 동작합니다.
+
+### 수동 설치 (직접 클론)
 
 ```bash
-cd ~/dotfiles
-chmod +x install.sh
+git clone git@github.com:isac7722/gituser.git ~/gituser
+cd ~/gituser
 ./install.sh
 ```
 
@@ -46,7 +50,7 @@ chmod +x install.sh
 | 단계 | 내용 |
 |------|------|
 | OS 감지 | macOS → `~/.zshrc` + `*.zsh` 로드 / Linux → `~/.bashrc` + `*.bash` 로드 |
-| source 블록 주입 | RC 파일에 dotfiles 로드 블록 추가 (이미 있으면 스킵) |
+| source 블록 주입 | RC 파일에 gituser 로드 블록 추가 (이미 있으면 스킵) |
 | 설정 파일 생성 | `~/.config/gituser/accounts` 생성 (템플릿 복사) |
 
 ### 3. 적용
@@ -190,10 +194,10 @@ clone 후 해당 저장소에 `--local` 계정 설정을 자동으로 적용합�
 
 ```bash
 # macOS (zsh)
-touch ~/dotfiles/my-functions.zsh
+touch ~/gituser/my-functions.zsh
 
 # Linux (bash)
-touch ~/dotfiles/my-functions.bash
+touch ~/gituser/my-functions.bash
 ```
 
 편집 후 `source ~/.zshrc` (또는 `~/.bashrc`)로 적용.

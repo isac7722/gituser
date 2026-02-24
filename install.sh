@@ -1,17 +1,43 @@
 #!/usr/bin/env bash
 # ============================================================
-# dotfiles 설치 스크립트
+# gituser 설치 스크립트
 # 사용법: ./install.sh [--dry-run]
 #
 # 하는 일:
 #   1. OS 감지 → 셸 RC 파일 결정 (.zshrc / .bashrc)
-#   2. RC 파일에 dotfiles source 블록 주입 (중복 방지)
+#   2. RC 파일에 gituser source 블록 주입 (중복 방지)
 #   3. Git user 계정 설정 파일 초기화
 # ============================================================
 
 set -e
 
-DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GITUSER_REPO="https://github.com/isac7722/gituser.git"
+GITUSER_DEFAULT_DIR="$HOME/gituser"
+
+# curl | bash 또는 bash <(curl ...) 로 실행된 경우:
+# BASH_SOURCE[0]가 비어있거나 실제 install.sh가 아닌 경우 리모트 모드로 동작
+DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+
+if [[ -z "$DOTFILES_DIR" || ! -f "$DOTFILES_DIR/install.sh" ]]; then
+  echo ""
+  echo "╔══════════════════════════════════════╗"
+  echo "║       gituser 리모트 설치             ║"
+  echo "╚══════════════════════════════════════╝"
+  echo ""
+
+  if [[ -d "$GITUSER_DEFAULT_DIR/.git" ]]; then
+    echo "  기존 gituser 발견: $GITUSER_DEFAULT_DIR"
+    echo "  최신 버전으로 업데이트 중..."
+    git -C "$GITUSER_DEFAULT_DIR" pull --ff-only
+  else
+    echo "  저장소 클론 중: $GITUSER_REPO"
+    git clone "$GITUSER_REPO" "$GITUSER_DEFAULT_DIR"
+  fi
+
+  echo ""
+  exec bash "$GITUSER_DEFAULT_DIR/install.sh" "$@"
+fi
+
 DRY_RUN=false
 
 # ── 옵션 파싱 ──────────────────────────────────────────────
@@ -34,7 +60,7 @@ section() { echo ""; echo "── $1 ──────────────�
 
 echo ""
 echo "╔══════════════════════════════════════╗"
-echo "║       dotfiles 설치 시작              ║"
+echo "║       gituser 설치 시작               ║"
 echo "╚══════════════════════════════════════╝"
 $DRY_RUN && warn "DRY-RUN 모드: 실제 변경 없음"
 
@@ -62,8 +88,8 @@ success "감지된 OS: $OS → RC 파일: $RC_FILE"
 
 section "셸 연동 ($RC_FILE)"
 
-MARKER_START="# >>> dotfiles >>>"
-MARKER_END="# <<< dotfiles <<<"
+MARKER_START="# >>> gituser >>>"
+MARKER_END="# <<< gituser <<<"
 
 # OS에 따라 로드할 파일 확장자 결정
 # macOS(zsh): *.zsh 로드  /  Linux(bash): *.bash 로드
@@ -76,7 +102,7 @@ fi
 # 블록 내용 (RC_FILE에 삽입될 내용)
 SOURCE_BLOCK="
 $MARKER_START
-# dotfiles 자동 로드 (install.sh가 생성)
+# gituser 자동 로드 (install.sh가 생성)
 DOTFILES_DIR=\"$DOTFILES_DIR\"
 for _df_file in \"\$DOTFILES_DIR\"/$DF_PATTERN; do
   [ -f \"\$_df_file\" ] && source \"\$_df_file\"
